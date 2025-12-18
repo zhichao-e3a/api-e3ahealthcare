@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    container_name: api-service
+    ports:
+      - "8502:8502"
+    env_file:
+      - config/.env
+    restart: unless-stopped
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    read_only: true
+    tmpfs:
+      - /tmp
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8502/docs').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
