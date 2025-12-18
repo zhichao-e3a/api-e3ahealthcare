@@ -7,7 +7,7 @@ services:
     container_name: api-service
 
     ports:
-      - "8502:8502"
+      - "8888:8000"
 
     volumes:
       - ./config:/app/config:ro
@@ -26,7 +26,7 @@ services:
       - /tmp
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8502/docs').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs').read()"]
       interval: 30s
       timeout: 5s
       retries: 3
