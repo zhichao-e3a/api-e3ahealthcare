@@ -23,6 +23,9 @@ def install_middleware(app: FastAPI) -> None:
             "localhost",
             "127.0.0.1",
             "[::1]",
-            "*.local"
-        ]
+            "*.local",
+            "host.docker.internal",
+            "host.docker.internal:8000",
+            "172.17.0.1"
+        ],
     )

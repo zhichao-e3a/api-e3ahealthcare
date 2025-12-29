@@ -5,12 +5,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
-from config.configs import REMOTE_MONGO_CONFIG
+from config.configs import REMOTE_MONGO_CONFIG, TEST_MONGO_CONFIG, SQL_CONFIG
 from database_manager.database.mongo import MongoDBConnector
+from database_manager.database.mysql import SQLDBConnector
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.mongo = MongoDBConnector(REMOTE_MONGO_CONFIG)
+    app.state.mongo = MongoDBConnector(TEST_MONGO_CONFIG)
+    app.state.sql   = SQLDBConnector(SQL_CONFIG)
     yield
 
 app = FastAPI(lifespan=lifespan)
