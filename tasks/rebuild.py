@@ -77,7 +77,7 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
     query_string = ",".join(recruited_mobiles)
     custom_query = RECRUITED.format(
         start="'2025-03-01 00:00:00'",
-        end=f"'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'",
+        end=f"'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'",
         numbers=query_string
     )
 
