@@ -11,7 +11,7 @@ from database_manager.database.mysql import SQLDBConnector
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.mongo = MongoDBConnector(TEST_MONGO_CONFIG)
+    app.state.mongo = MongoDBConnector(REMOTE_MONGO_CONFIG)
     app.state.sql   = SQLDBConnector(SQL_CONFIG)
     yield
 
