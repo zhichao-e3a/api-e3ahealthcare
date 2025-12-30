@@ -7,7 +7,7 @@ def install_middleware(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "https://dashboard.ai.e3ahealth.com",
+            "https://api.ai.e3ahealth.com",
             "https://35.240.213.6:8000/",
             "http://35.240.213.6:8000/"
         ],
