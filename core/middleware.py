@@ -6,10 +6,10 @@ def install_middleware(app: FastAPI) -> None:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r".*",
         allow_origins=[
-            "http://localhost:8501",
-            "http://127.0.0.1:8501",
+            "https://dashboard.ai.e3ahealth.com",
+            "https://35.240.213.6:8000/",
+            "http://35.240.213.6:8000/"
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -20,6 +20,7 @@ def install_middleware(app: FastAPI) -> None:
         TrustedHostMiddleware,
         allowed_hosts=[
             "api.ai.e3ahealth.com",
+            "35.240.213.6",
             "localhost",
             "127.0.0.1",
             "[::1]",
