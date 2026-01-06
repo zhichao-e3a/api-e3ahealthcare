@@ -21,7 +21,7 @@ async def run_merge_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnecto
 async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
 
     surveyed_patients = await mongo.get_all_documents(
-        coll_name="patients_unified",
+        coll_name="PATIENTS_UNIFIED",
         projection = {
             "_id"           : 0,
             "mobile"        : 1,
@@ -34,16 +34,17 @@ async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
             "pih"           : 1,
             "delivery_type" : 1,
             "add"           : 1,
+            "edd"           : 1,
             "onset"         : 1,
             "type"          : 1
         }
     )
 
-    surveyed_patients_mobiles = set([i['mobile'] for i in surveyed_patients])
-    surveyed_rec_patients_mobiles = set([i['mobile'] for i in surveyed_patients if i['type'] == 'rec'])
-    surveyed_hist_patients_mobiles = set([i['mobile'] for i in surveyed_patients if i['type'] == 'hist'])
+    surveyed_patients_mobiles       = set([i['mobile'] for i in surveyed_patients])
+    surveyed_rec_patients_mobiles   = set([i['mobile'] for i in surveyed_patients if i['type'] == 'rec'])
+    surveyed_hist_patients_mobiles  = set([i['mobile'] for i in surveyed_patients if i['type'] == 'hist'])
 
-    print(f"QUERIED FROM `patients_unified` ({len(surveyed_patients_mobiles)} PATIENTS)")
+    print(f"QUERIED FROM `PATIENTS_UNIFIED` ({len(surveyed_patients_mobiles)} PATIENTS)")
     print(f"{len(surveyed_rec_patients_mobiles)} RECRUITED PATIENTS")
     print(f"{len(surveyed_hist_patients_mobiles)} HISTORICAL PATIENTS")
     print()
@@ -63,8 +64,8 @@ async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
         }
     )
 
-    all_patients_mobiles = set([i['mobile'] for i in measurements])
-    recruited_patients_mobiles = set([i['mobile'] for i in measurements if i['origin'] == "REC"])
+    all_patients_mobiles        = set([i['mobile'] for i in measurements])
+    recruited_patients_mobiles  = set([i['mobile'] for i in measurements if i['origin'] == "REC"])
     historical_patients_mobiles = set([i['mobile'] for i in measurements if i['origin'] == "HIST"])
 
     print(f"QUERIED FROM `FILT_RECORDS` ({len(all_patients_mobiles)} PATIENTS)")
@@ -110,10 +111,12 @@ async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
     hist_metadata["onset"]         = None
     hist_metadata["type"]          = "hist"
 
+    hist_metadata.rename(columns={"expected_born_date": "edd"}, inplace=True)
+
     cols = [
         "mobile", "age", "bmi",
         "had_pregnancy", "had_preterm", "had_surgery", "gdm", "pih",
-        "delivery_type", "add", "onset", "type"
+        "delivery_type", "add", "edd", "onset", "type"
     ]
 
     hist_metadata = hist_metadata[cols]

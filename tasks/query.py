@@ -38,20 +38,20 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
     print(f"[H] WATERMARK RETRIEVED ({last_utime})")
 
     recruited_patients = await mongo.get_all_documents(
-        coll_name="patients_unified",
+        coll_name="PATIENTS_UNIFIED",
         query={
-            'type'  : 'rec',
-            'add'   : None
+            'origin'    : 'rec',
+            'add'       : None
         },
         projection={
-            '_id': 0,
-            'mobile': 1
+            '_id'       : 0,
+            'mobile'    : 1
         }
     )
 
     recruited_mobiles = [i['mobile'] for i in recruited_patients]
 
-    print(f"[R] QUERIED FROM `patients_unified` ({len(recruited_mobiles)} PATIENTS)")
+    print(f"[R] QUERIED FROM `PATIENTS_UNIFIED` ({len(recruited_mobiles)} PATIENTS)")
 
     query_string = ",".join(recruited_mobiles)
     custom_query = RECRUITED.format(
@@ -95,9 +95,9 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
 
     print(f"[A] DOWNLOADED UC, FHR, FMOV DATA")
 
-    sorted_uc_list = sorted(uc_results, key=lambda x: x[0])
-    sorted_fhr_list = sorted(fhr_results, key=lambda x: x[0])
-    sorted_fmov_list = sorted(fmov_results, key=lambda x: x[0])
+    sorted_uc_list      = sorted(uc_results, key=lambda x: x[0])
+    sorted_fhr_list     = sorted(fhr_results, key=lambda x: x[0])
+    sorted_fmov_list    = sorted(fmov_results, key=lambda x: x[0])
 
     rec_df["uc_str"]    = [x[1] for x in sorted_uc_list]
     rec_df["fhr_str"]   = [x[1] for x in sorted_fhr_list]
