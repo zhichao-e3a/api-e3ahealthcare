@@ -111,7 +111,9 @@ async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
     hist_metadata["onset"]         = None
     hist_metadata["type"]          = "hist"
 
-    hist_metadata.rename(columns={"expected_born_date": "edd"}, inplace=True)
+    hist_metadata["edd"] = hist_metadata["expected_born_date"].apply(
+        lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else None
+    )
 
     cols = [
         "mobile", "age", "bmi",
