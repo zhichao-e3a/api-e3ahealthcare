@@ -36,13 +36,13 @@ async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
             "add"           : 1,
             "edd"           : 1,
             "onset"         : 1,
-            "type"          : 1
+            "origin"        : 1
         }
     )
 
     surveyed_patients_mobiles       = set([i['mobile'] for i in surveyed_patients])
-    surveyed_rec_patients_mobiles   = set([i['mobile'] for i in surveyed_patients if i['type'] == 'rec'])
-    surveyed_hist_patients_mobiles  = set([i['mobile'] for i in surveyed_patients if i['type'] == 'hist'])
+    surveyed_rec_patients_mobiles   = set([i['mobile'] for i in surveyed_patients if i['origin'] == 'rec'])
+    surveyed_hist_patients_mobiles  = set([i['mobile'] for i in surveyed_patients if i['origin'] == 'hist'])
 
     print(f"QUERIED FROM `PATIENTS_UNIFIED` ({len(surveyed_patients_mobiles)} PATIENTS)")
     print(f"{len(surveyed_rec_patients_mobiles)} RECRUITED PATIENTS")
