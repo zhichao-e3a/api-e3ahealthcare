@@ -25,28 +25,28 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
 
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
-    # for c in ["RAW_RECORDS", "FILT_RECORDS", "MERGED_RECORDS"]:
-    #
-    #     n_del = await mongo.delete_all_documents(coll_name=c)
-    #
-    #     print(f"[{c}] {n_del} DOCUMENTS DELETED")
-    #
-    # for c in ['SQL', 'RAW_RECORDS']:
-    #
-    #     watermark_log = {
-    #         'pipeline_name' : c,
-    #         'last_utime'    : '2000-01-01 00:00:00',
-    #     }
-    #
-    #     await mongo.upsert_documents_hashed(
-    #         coll_name   = 'WATERMARKS',
-    #         records     = [watermark_log],
-    #         id_fields   = ["pipeline_name"]
-    #     )
-    #
-    # print(f"[WATERMARKS] UPDATED TO 2000-01-01 00:00:00")
-    #
-    # print()
+    for c in ["RAW_RECORDS", "FILT_RECORDS", "MERGED_RECORDS"]:
+
+        n_del = await mongo.delete_all_documents(coll_name=c)
+
+        print(f"[{c}] {n_del} DOCUMENTS DELETED")
+
+    for c in ['SQL', 'RAW_RECORDS']:
+
+        watermark_log = {
+            'pipeline_name' : c,
+            'last_utime'    : '2000-01-01 00:00:00',
+        }
+
+        await mongo.upsert_documents_hashed(
+            coll_name   = 'WATERMARKS',
+            records     = [watermark_log],
+            id_fields   = ["pipeline_name"]
+        )
+
+    print(f"[WATERMARKS] UPDATED TO 2000-01-01 00:00:00")
+
+    print()
 
     print(f"OUTLIERS (RECRUITED PATIENTS BUT MARKED AS HISTORICAL): {OUTLIERS}")
 
