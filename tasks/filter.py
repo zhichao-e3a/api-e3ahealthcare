@@ -24,7 +24,7 @@ async def filter(mongo: MongoDBConnector) -> None:
     curr_watermark = await mongo.get_all_documents(
         coll_name   = "WATERMARKS",
         query       = {
-            "_id": "RAW_RECORDS"
+            "_id": "RECORDS_RAW"
         },
         projection  = {
             "_id"        : 0,
@@ -33,28 +33,44 @@ async def filter(mongo: MongoDBConnector) -> None:
         }
     )
 
-    last_utime  = curr_watermark[0]['last_utime']
-    last_id     = curr_watermark[0]['last_id']
+    if curr_watermark:
 
-    print(f"WATERMARK RETRIEVED ({last_utime}, {last_id})")
+        last_utime  = curr_watermark[0]['last_utime']
+        last_id     = curr_watermark[0]['last_id']
 
-    raw_records = mongo.stream_all_documents(
-        coll_name = "RAW_RECORDS",
-        query={
-            "$or": [
-                {"utime": {"$gt": last_utime}},
-                {"utime": last_utime, "_id": {"$gt": last_id}}
+        print(f"WATERMARK RETRIEVED ({last_utime}, {last_id})")
+
+        raw_records = mongo.stream_all_documents(
+            coll_name = "RECORDS_RAW",
+            query={
+                "$or": [
+                    {"utime": {"$gt": last_utime}},
+                    {"utime": last_utime, "_id": {"$gt": last_id}}
+                ]
+            },
+            projection = {
+                "ctime"     : 0,
+                "doc_hash"  : 0
+            },
+            sort = [
+                ("utime", 1),
+                ("_id", 1)
             ]
-        },
-        projection = {
-            "ctime"     : 0,
-            "doc_hash"  : 0
-        },
-        sort = [
-            ("utime", 1),
-            ("_id", 1)
-        ]
-    )
+        )
+
+    else:
+
+        raw_records = mongo.stream_all_documents(
+            coll_name = "RECORDS_RAW",
+            projection = {
+                "ctime"     : 0,
+                "doc_hash"  : 0
+            },
+            sort = [
+                ("utime", 1),
+                ("_id", 1)
+            ]
+        )
 
     all_added   = 0
     all_skipped = 0
@@ -89,14 +105,14 @@ async def filter(mongo: MongoDBConnector) -> None:
         if len(filt_records) > 0:
 
             await mongo.upsert_documents_hashed(
-                coll_name=f'FILT_RECORDS',
+                coll_name=f'RECORDS_FILT',
                 records=filt_records
             )
 
-            print(f"[B] UPSERTED TO `FILT_RECORDS` ({len(filt_records)} RECORDS)")
+            print(f"[B] UPSERTED TO `RECORDS_FILT` ({len(filt_records)} RECORDS)")
 
         watermark_log = {
-            "pipeline_name" : "RAW_RECORDS",
+            "pipeline_name" : "RECORDS_RAW",
             "last_utime"    : batch_max_utime,
             "last_id"       : batch_max_id,
         }
@@ -110,5 +126,5 @@ async def filter(mongo: MongoDBConnector) -> None:
 
         print(f"[B] UPSERTED WATERMARK ({batch_max_utime})")
 
-    print(f"[A] UPSERTED TO `FILT_RECORDS` ({all_added} RECORDS)")
-    print(f"[A] {all_skipped} RECORDS SKIPPED")
+    print(f"UPSERTED TO `RECORDS_FILT` ({all_added} RECORDS)")
+    print(f"{all_skipped} RECORDS SKIPPED")

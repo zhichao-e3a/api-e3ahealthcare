@@ -1,5 +1,5 @@
 from utils.common import patch_job
-from utils.query import extract_gest_age, async_process_df
+from utils.query import df_to_records
 from schemas.records import assert_records_match_schema
 from database_manager.database.mongo import MongoDBConnector
 from database_manager.database.mysql import SQLDBConnector
@@ -83,68 +83,7 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     df = pd.concat([rec_df, hist_df], ignore_index=True)
 
-    df["measurement_date"] = (
-        pd.to_datetime(df["start_ts"], unit="s", utc=True)
-        .dt.tz_convert("Asia/Singapore")
-        .dt.strftime("%Y-%m-%d %H:%M:%S")
-    )
-
-    df["start_test_ts"] = (
-        pd.to_datetime(df["start_test_ts"], unit="s", utc=True, errors="coerce")
-        .dt.tz_convert("Asia/Singapore")
-        .dt.strftime("%Y-%m-%d %H:%M:%S")
-    )
-
-    df["sql_utime"] = (
-        pd.to_datetime(df["utime"], unit="s", utc=True, errors="coerce")
-        .dt.tz_convert("Asia/Singapore")
-        .dt.strftime("%Y-%m-%d %H:%M:%S")
-    )
-
-    # UC, FHR, FMov measurements not ordered yet
-    uc_results, fhr_results, fmov_results = await async_process_df(df)
-
-    print(f"DOWNLOADED UC, FHR, FMOV DATA")
-
-    sorted_uc_list      = sorted(uc_results, key=lambda x: x[0])
-    sorted_fhr_list     = sorted(fhr_results, key=lambda x: x[0])
-    sorted_fmov_list    = sorted(fmov_results, key=lambda x: x[0])
-
-    df["uc_str"]    = [x[1] for x in sorted_uc_list]
-    df["fhr_str"]   = [x[1] for x in sorted_fhr_list]
-    df["fmov_str"]  = [x[1] for x in sorted_fmov_list]
-
-    df["uc"]    = df["uc_str"].str.split("\n")
-    df["fhr"]   = df["fhr_str"].str.split("\n")
-    df["fmov"]  = df["fmov_str"].where(df["fmov_str"].astype(bool), None).str.split("\n")
-
-    df["gest_age"] = df.apply(
-        lambda r: extract_gest_age(r["conclusion"], r["basic_info"]),
-        axis=1
-    ).astype("Int64")
-
-    df.rename(columns={"id": "_id"}, inplace=True)
-
-    df.drop(
-        columns=[
-            "start_ts",
-            "contraction_url",
-            "hb_baby_url",
-            "raw_fetal_url",
-            "basic_info",
-            "conclusion",
-            "expected_born_date",
-            "end_born_ts",
-            "utime",
-            "uc_str",
-            "fhr_str",
-            "fmov_str"
-        ],
-        inplace=True,
-        errors="ignore"
-    )
-
-    records = df.to_dict(orient="records")
+    records = await df_to_records(df)
 
     assert_records_match_schema(records, record_type="RAW")
 
