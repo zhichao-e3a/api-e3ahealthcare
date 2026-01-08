@@ -25,13 +25,13 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
 
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
-    for c in ["RAW_RECORDS", "FILT_RECORDS", "MERGED_RECORDS"]:
+    for c in ["RECORDS_RAW", "RECORDS_FILT"]:
 
         n_del = await mongo.delete_all_documents(coll_name=c)
 
         print(f"[{c}] {n_del} DOCUMENTS DELETED")
 
-    for c in ['SQL', 'RAW_RECORDS']:
+    for c in ['RECORDS_RAW']:
 
         watermark_log = {
             'pipeline_name' : c,
