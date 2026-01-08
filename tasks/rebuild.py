@@ -25,28 +25,28 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
 
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
-    for c in ["RAW_RECORDS", "FILT_RECORDS", "MERGED_RECORDS"]:
-
-        n_del = await mongo.delete_all_documents(coll_name=c)
-
-        print(f"[{c}] {n_del} DOCUMENTS DELETED")
-
-    for c in ['SQL', 'RAW_RECORDS']:
-
-        watermark_log = {
-            'pipeline_name' : c,
-            'last_utime'    : '2000-01-01 00:00:00',
-        }
-
-        await mongo.upsert_documents_hashed(
-            coll_name   = 'WATERMARKS',
-            records     = [watermark_log],
-            id_fields   = ["pipeline_name"]
-        )
-
-    print(f"[WATERMARKS] UPDATED TO 2000-01-01 00:00:00")
-
-    print()
+    # for c in ["RAW_RECORDS", "FILT_RECORDS", "MERGED_RECORDS"]:
+    #
+    #     n_del = await mongo.delete_all_documents(coll_name=c)
+    #
+    #     print(f"[{c}] {n_del} DOCUMENTS DELETED")
+    #
+    # for c in ['SQL', 'RAW_RECORDS']:
+    #
+    #     watermark_log = {
+    #         'pipeline_name' : c,
+    #         'last_utime'    : '2000-01-01 00:00:00',
+    #     }
+    #
+    #     await mongo.upsert_documents_hashed(
+    #         coll_name   = 'WATERMARKS',
+    #         records     = [watermark_log],
+    #         id_fields   = ["pipeline_name"]
+    #     )
+    #
+    # print(f"[WATERMARKS] UPDATED TO 2000-01-01 00:00:00")
+    #
+    # print()
 
     print(f"OUTLIERS (RECRUITED PATIENTS BUT MARKED AS HISTORICAL): {OUTLIERS}")
 
@@ -56,23 +56,17 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     hist_df["origin"] = "HIST"
 
-    print(f"[H] QUERIED FROM NAVICAT ({len(hist_df)} MEASUREMENTS)")
+    print(f"QUERIED FROM NAVICAT ({len(hist_df)} MEASUREMENTS)")
 
     recruited_patients = await mongo.get_all_documents(
-        coll_name   = "PATIENTS_UNIFIED",
-        query       = {
-            'origin' : 'rec',
-            'add'    : {'$ne': None}
-        },
-        projection  = {
-            '_id'    : 0,
-            'mobile' : 1
-        }
+        coll_name   = "METADATA_REC",
+        query       = {'processed': False},
+        projection  = {'_id': 0, 'mobile': 1}
     )
 
     recruited_mobiles = [i['mobile'] for i in recruited_patients]
 
-    print(f"[R] QUERIED FROM `PATIENTS_UNIFIED` ({len(recruited_mobiles)} PATIENTS)")
+    print(f"QUERIED FROM `METADATA_REC` ({len(recruited_mobiles)} PATIENTS)")
 
     query_string = ",".join(recruited_mobiles)
     custom_query = RECRUITED.format(
@@ -85,7 +79,7 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     rec_df["origin"] = "REC"
 
-    print(f"[R] QUERIED FROM NAVICAT ({len(rec_df)} MEASUREMENTS)")
+    print(f"QUERIED FROM NAVICAT ({len(rec_df)} MEASUREMENTS)")
 
     df = pd.concat([rec_df, hist_df], ignore_index=True)
 
@@ -110,7 +104,7 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
     # UC, FHR, FMov measurements not ordered yet
     uc_results, fhr_results, fmov_results = await async_process_df(df)
 
-    print(f"[A] DOWNLOADED UC, FHR, FMOV DATA")
+    print(f"DOWNLOADED UC, FHR, FMOV DATA")
 
     sorted_uc_list      = sorted(uc_results, key=lambda x: x[0])
     sorted_fhr_list     = sorted(fhr_results, key=lambda x: x[0])
@@ -154,14 +148,24 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     assert_records_match_schema(records, record_type="RAW")
 
+    for m in recruited_mobiles:
+
+        await mongo.patch_document(
+            coll_name   = "METADATA_REC",
+            query       = {'mobile': m},
+            set_fields  = {'processed': True}
+        )
+
+        print(f"PATIENT {m} MARKED AS PROCESSED")
+
     if len(df) > 0:
 
         await mongo.upsert_documents_hashed(
-            coll_name   = 'RAW_RECORDS',
+            coll_name   = 'RECORDS_RAW',
             records     = records
         )
 
-        print(f"[A] UPSERTED TO 'RAW_RECORDS' ({len(records)} RECORDS)")
+        print(f"UPSERTED TO 'RECORDS_RAW' ({len(records)} RECORDS)")
 
     else:
-        print(f"[A] NO RECORDS")
+        print(f"NO RECORDS")
