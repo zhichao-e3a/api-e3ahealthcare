@@ -1,149 +1,84 @@
 from utils.common import patch_job
-from utils.merge import bmi_choose_weight_kg
+from utils.merge import process_row
+from database_manager.database.mongo import MongoDBConnector
 
+import os
+import json
 import pandas as pd
 
-from database_manager.database.mongo import MongoDBConnector
-from database_manager.database.mysql import SQLDBConnector
-from database_manager.database.queries import HISTORICAL_METADATA_QUERY
+from tqdm.auto import tqdm
+from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-async def run_merge_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
+async def run_merge_job(job_id: str, mongo: MongoDBConnector) -> None:
 
     await patch_job(mongo, job_id, status="running", result=None, error=None)
 
     try:
-        await merge(mongo=mongo, sql=sql)
+        await merge(mongo=mongo)
         await patch_job(mongo, job_id, status="succeeded", result=None, error=None)
 
     except Exception as e:
         await patch_job(mongo, job_id, status="failed", result=None, error=str(e))
 
-async def merge(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
+async def merge(mongo: MongoDBConnector) -> None:
 
-    surveyed_patients = await mongo.get_all_documents(
-        coll_name="PATIENTS_UNIFIED",
-        projection = {
-            "_id"           : 0,
-            "mobile"        : 1,
-            "age"           : 1,
-            "bmi"           : 1,
-            "had_pregnancy" : 1,
-            "had_preterm"   : 1,
-            "had_surgery"   : 1,
-            "gdm"           : 1,
-            "pih"           : 1,
-            "delivery_type" : 1,
-            "add"           : 1,
-            "edd"           : 1,
-            "onset"         : 1,
-            "origin"        : 1
-        }
-    )
+    meta_pred    = await mongo.get_all_documents(coll_name="METADATA_PRED")
+    meta_pred_df = pd.DataFrame(meta_pred)
+    print(f"[PRED] {len(meta_pred_df)} metadata records fetched")
 
-    surveyed_patients_mobiles       = set([i['mobile'] for i in surveyed_patients])
-    surveyed_rec_patients_mobiles   = set([i['mobile'] for i in surveyed_patients if i['origin'] == 'rec'])
-    surveyed_hist_patients_mobiles  = set([i['mobile'] for i in surveyed_patients if i['origin'] == 'hist'])
+    measurements_pred    = await mongo.get_all_documents(coll_name="RECORDS_PRED")
+    measurements_pred_df = pd.DataFrame(measurements_pred)
+    print(f"[PRED] {len(measurements_pred_df)} measurement records fetched")
 
-    print(f"QUERIED FROM `PATIENTS_UNIFIED` ({len(surveyed_patients_mobiles)} PATIENTS)")
-    print(f"{len(surveyed_rec_patients_mobiles)} RECRUITED PATIENTS")
-    print(f"{len(surveyed_hist_patients_mobiles)} HISTORICAL PATIENTS")
-    print()
+    merged_pred_df = measurements_pred_df.merge(meta_pred_df, how="left", on='mobile')
+    print(f"[PRED] {len(merged_pred_df)} merged records")
 
-    measurements = await mongo.get_all_documents(
-        coll_name=f"FILT_RECORDS",
-        projection={
-            "_id"               : 1,
-            "mobile"            : 1,
-            "start_test_ts"     : 1,
-            "measurement_date"  : 1,
-            "uc"                : 1,
-            "fhr"               : 1,
-            "fmov"              : 1,
-            "gest_age"          : 1,
-            "origin"            : 1
-        }
-    )
+    merged_pred = merged_pred_df.to_dict(orient="records")
 
-    all_patients_mobiles        = set([i['mobile'] for i in measurements])
-    recruited_patients_mobiles  = set([i['mobile'] for i in measurements if i['origin'] == "REC"])
-    historical_patients_mobiles = set([i['mobile'] for i in measurements if i['origin'] == "HIST"])
+    dataset = []
+    with ProcessPoolExecutor(max_workers=max(1, os.cpu_count() - 1)) as executor:
 
-    print(f"QUERIED FROM `FILT_RECORDS` ({len(all_patients_mobiles)} PATIENTS)")
-    print(f"{len(recruited_patients_mobiles)} RECRUITED PATIENTS")
-    print(f"{len(historical_patients_mobiles)} HISTORICAL PATIENTS")
-    print()
+        futures = [executor.submit(process_row, row) for row in merged_pred]
 
-    print("INSIDE `patient_unified` BUT NO VALID MEASUREMENTS:")
-    print(f"RECRUITED  : {surveyed_rec_patients_mobiles - recruited_patients_mobiles}")
-    print(f"HISTORICAL : {surveyed_hist_patients_mobiles - historical_patients_mobiles}")
-    print()
+        for fut in tqdm(as_completed(futures), total=len(futures)):
 
-    print(f"QUERIED FROM `FILT_RECORDS` ({len(measurements)} MEASUREMENTS)")
+            rec = fut.result()
+            if rec is not None:
+                dataset.append(rec)
 
-    relevant_historical = historical_patients_mobiles - surveyed_hist_patients_mobiles
-    query_str = ", ".join(list(relevant_historical))
+    pred_out = f"/app/datasets/{datetime.now().strftime('%Y%m%d')}_dataset_pred.json"
+    with open(pred_out, "w") as f:
+        f.write(json.dumps(dataset))
 
-    df = sql.query_to_dataframe(query=HISTORICAL_METADATA_QUERY.format(mobile_query_str=query_str))
-    df_pivot = df.pivot(
-        index=[i for i in df.columns if i not in ['record_type', 'record_answer']],
-        columns='record_type',
-        values='record_answer'
-    ).reset_index()
+    print(len(dataset), "measurements written to", pred_out)
 
-    hist_metadata = df_pivot.copy()
+    meta_rec    = await mongo.get_all_documents(coll_name="METADATA_REC")
+    meta_hist   = await mongo.get_all_documents(coll_name="METADATA_HIST")
+    meta_all    = meta_rec + meta_hist
+    meta_all_df = pd.DataFrame(meta_all)
+    print(f"[ALL] {len(meta_all_df)} metadata records fetched")
 
-    hist_metadata["age"] = pd.to_numeric(hist_metadata["age"], errors="coerce").astype("Int64")
-    hist_metadata["bmi"] = hist_metadata.apply(
-        lambda r: bmi_choose_weight_kg(height_cm=r["height"], weight_val=r["old_weight"]),
-        axis=1
-    )
-    hist_metadata["had_pregnancy"] = (hist_metadata[1.0] > 1).astype(int)
-    hist_metadata["had_preterm"]   = (hist_metadata[8.0] == 0).astype(int)
-    hist_metadata["had_surgery"]   = (hist_metadata[13.0] == 0).astype(int)
-    hist_metadata["gdm"]           = (hist_metadata[4.0] == 0).astype(int)
-    hist_metadata["pih"]           = (hist_metadata[5.0] == 0).astype(int)
-    hist_metadata["delivery_type"] = None
-    hist_metadata["add"]           = (
-        pd.to_datetime(hist_metadata["end_born_ts"], unit="s", utc=True)
-        .dt.tz_convert("Asia/Singapore")
-        .dt.strftime("%Y-%m-%d %H:%M")
-    )
-    hist_metadata["onset"]         = None
-    hist_metadata["type"]          = "hist"
+    measurements_all    = await mongo.get_all_documents(coll_name="RECORDS_FILT")
+    measurements_all_df = pd.DataFrame(measurements_all)
+    print(f"[ALL] {len(measurements_all_df)} measurement records fetched")
 
-    hist_metadata["edd"] = hist_metadata["expected_born_date"].apply(
-        lambda d: d.strftime("%Y-%m-%d") if pd.notna(d) else None
-    )
+    merged_all_df = measurements_all_df.merge(meta_all_df, how="left", on='mobile')
+    print(f"[ALL] {len(merged_all_df)} merged records")
 
-    cols = [
-        "mobile", "age", "bmi",
-        "had_pregnancy", "had_preterm", "had_surgery", "gdm", "pih",
-        "delivery_type", "add", "edd", "onset", "type"
-    ]
+    merged_all = merged_all_df.to_dict(orient="records")
 
-    hist_metadata = hist_metadata[cols]
-    surveyed_metadata = pd.DataFrame(surveyed_patients)
+    dataset = []
+    with ProcessPoolExecutor(max_workers=max(1, os.cpu_count() - 1)) as executor:
 
-    all_metadata = pd.concat([surveyed_metadata, hist_metadata], ignore_index=True)
+        futures = [executor.submit(process_row, row) for row in merged_all]
 
-    mobile_set = set()
-    for _, i in all_metadata.iterrows():
-        if i['mobile'] not in mobile_set:
-            mobile_set.add(i['mobile'])
-            continue
-        print(f"REPEATED PATIENT: {i['mobile']}")
+        for fut in tqdm(as_completed(futures), total=len(futures)):
 
-    print(f"QUERIED METADATA FOR {len(all_metadata)} PATIENTS")
+            rec = fut.result()
+            if rec is not None:
+                dataset.append(rec)
 
-    merged = pd.DataFrame(measurements).merge(all_metadata, how="left", on="mobile")
-
-    print(f"COMPLETE MERGED DATA FOR {len(set(merged['mobile']))} PATIENTS")
-
-    merged_docs = merged.to_dict(orient="records")
-
-    await mongo.upsert_documents_hashed(
-        coll_name="MERGED_RECORDS",
-        records=merged_docs
-    )
-
-    print(f"UPSERTED TO `MERGED_RECORDS` ({len(merged_docs)} RECORDS)")
+    all_out = f"/app/datasets/{datetime.now().strftime('%Y%m%d')}_dataset_all.json"
+    with open(all_out, "w") as f:
+        f.write(json.dumps(dataset))

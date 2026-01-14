@@ -25,7 +25,7 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
 
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
-    for c in ["RECORDS_RAW", "RECORDS_FILT"]:
+    for c in ["RECORDS_RAW", "RECORDS_FILT", "RECORDS_PRED"]:
 
         n_del = await mongo.delete_all_documents(coll_name=c)
 

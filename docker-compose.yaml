@@ -14,6 +14,7 @@ services:
 
     volumes:
       - ./config:/app/config:ro
+      - ./datasets:/app/datasets
 
     restart: unless-stopped
 

@@ -125,12 +125,12 @@ async def filter(response: Response, mongo: MongoDBConnector = Depends(get_mongo
 @router.post(path="/merge", response_model=JobOut)
 async def merge(
         response: Response,
-        mongo: MongoDBConnector = Depends(get_mongo), sql: SQLDBConnector = Depends(get_sql)
+        mongo: MongoDBConnector = Depends(get_mongo)
 ):
 
     job = await create_job(mongo, job_type="merge")
 
-    asyncio.create_task(run_merge_job(job["_id"], mongo=mongo, sql=sql))
+    asyncio.create_task(run_merge_job(job["_id"], mongo=mongo))
 
     response.status_code = 202
     response.headers["Location"]    = f"/pipeline/jobs/{job['_id']}"

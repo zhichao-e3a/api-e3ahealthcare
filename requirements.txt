@@ -64,4 +64,6 @@ uvloop==0.22.1
 watchfiles==1.1.1
 websockets==15.0.1
 yarl==1.22.0
+scipy==1.16.3
+tqdm==4.67.1
 vendor/database_manager-1.2.3-py3-none-any.whl

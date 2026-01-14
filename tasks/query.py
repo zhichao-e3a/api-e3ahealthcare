@@ -1,5 +1,6 @@
 from utils.common import patch_job
 from utils.query import df_to_records
+from utils.filter import async_filter_record
 from schemas.records import assert_records_match_schema
 from database_manager.database.mongo import MongoDBConnector
 from database_manager.database.mysql import SQLDBConnector
@@ -7,6 +8,7 @@ from database_manager.database.queries import RECRUITED
 
 import anyio
 
+from anyio import CapacityLimiter, create_task_group
 from datetime import datetime
 
 async def run_query_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
@@ -102,11 +104,20 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
 
             records = await df_to_records(not_given_birth_df)
 
-            assert_records_match_schema(records, record_type="RAW")
+            limiter = CapacityLimiter(50)
+            filtered = []
 
-            await mongo.upsert_documents_hashed(
-                coll_name='RECORDS_PRED',
-                records=records
-            )
+            async def run_and_collect(r):
+                res = await async_filter_record(r, limiter)
+                if res is not None:
+                    filtered.append(res)
 
-            print(f"[A] UPSERTED TO 'RECORDS_PRED' ({len(records)} RECORDS)")
+            async with create_task_group() as tg:
+                for r in records:
+                    tg.start_soon(run_and_collect, r)
+
+            assert_records_match_schema(filtered, record_type="FILT")
+
+            await mongo.upsert_documents_hashed(coll_name="RECORDS_PRED", records=filtered)
+
+            print(f"[A] UPSERTED TO 'RECORDS_PRED' ({len(filtered)} RECORDS)")
