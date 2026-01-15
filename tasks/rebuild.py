@@ -25,6 +25,23 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
 
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
+    for c in ["METADATA_REC"]:
+
+        mobiles = await mongo.get_all_documents(
+            coll_name=c,
+            projection={'_id': 0, 'mobile': 1}
+        )
+
+        for m in mobiles:
+
+            await mongo.patch_document(
+                coll_name=c,
+                query={'mobile': m['mobile']},
+                set_fields={'processed': False}
+            )
+
+            print(f"[{c}] PATIENT {m['mobile']} MARKED AS UNPROCESSED")
+
     for c in ["RECORDS_RAW", "RECORDS_FILT", "RECORDS_PRED"]:
 
         n_del = await mongo.delete_all_documents(coll_name=c)
@@ -33,18 +50,13 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     for c in ['RECORDS_RAW']:
 
-        watermark_log = {
-            'pipeline_name' : c,
-            'last_utime'    : '2000-01-01 00:00:00',
-        }
-
-        await mongo.upsert_documents_hashed(
-            coll_name   = 'WATERMARKS',
-            records     = [watermark_log],
-            id_fields   = ["pipeline_name"]
+        await mongo.patch_document(
+            coll_name="WATERMARKS",
+            query={'pipeline_name': c},
+            set_fields={'last_utime': '2000-01-01 00:00:00'}
         )
 
-    print(f"[WATERMARKS] UPDATED TO 2000-01-01 00:00:00")
+    print(f"[WATERMARKS] WATERMARK UPDATED TO 2000-01-01 00:00:00")
 
     print()
 
