@@ -5,79 +5,75 @@ from core.database import get_mongo
 
 router = APIRouter(prefix="/mms")
 
+
 @router.post(path="/upsert_annotation", status_code=200)
 async def upsert_annotation(payload: AnnotationPayload, mongo=Depends(get_mongo)):
 
-    m_date  = payload.m_date
-    mobile  = payload.mobile
-    notes   = payload.notes
-    annot   = payload.annotations
+    m_date = payload.m_date
+    mobile = payload.mobile
+    notes = payload.notes
+    annot = payload.annotations
 
     record = {
-        '_id'               : f"{mobile}{m_date}",
-        'measurement_date'  : m_date,
-        'mobile'            : mobile,
-        'annotations'       : [
-            {
-                'start' : i.start,
-                'end'   : i.end,
-                'description' : i.description
-            }\
+        "_id": f"{mobile}{m_date}",
+        "measurement_date": m_date,
+        "mobile": mobile,
+        "annotations": [
+            {"start": i.start, "end": i.end, "description": i.description}
             for i in annot
         ],
-        'notes'             : notes
+        "notes": notes,
     }
 
     await mongo.upsert_documents_hashed(
-        coll_name='traceannotations', records=[record], fields=["annotations", "notes"]
+        coll_name="traceannotations", records=[record], fields=["annotations", "notes"]
     )
 
     return {"status": "OK"}
 
+
 @router.get(path="/get_annotation", status_code=200)
 async def get_annotation(
-        mobile: str = Query(alias="mobile"),
-        m_date: str = Query(alias="measurement_date"),
-        mongo=Depends(get_mongo)
+    mobile: str = Query(alias="mobile"),
+    m_date: str = Query(alias="measurement_date"),
+    mongo=Depends(get_mongo),
 ):
 
     annotation = await mongo.get_all_documents(
-        coll_name="traceannotations",
-        query={
-            "_id" : f"{mobile}{m_date}"
-        }
+        coll_name="traceannotations", query={"_id": f"{mobile}{m_date}"}
     )
 
-    return {"exists" : True, **annotation[0]} if annotation else {"exists": False}
+    return {"exists": True, **annotation[0]} if annotation else {"exists": False}
+
 
 @router.post(path="/insert_bad_measurement", status_code=200)
-async def insert_bad_measurement(payload: BadMeasurementPayload, mongo=Depends(get_mongo)):
+async def insert_bad_measurement(
+    payload: BadMeasurementPayload, mongo=Depends(get_mongo)
+):
 
     m_date = payload.m_date
     mobile = payload.mobile
 
     record = {
-        '_id' : f"{mobile}{m_date}",
-        'measurement_date' : m_date,
-        'mobile' : mobile,
+        "_id": f"{mobile}{m_date}",
+        "measurement_date": m_date,
+        "mobile": mobile,
     }
 
-    await mongo.upsert_documents_hashed(coll_name='bad_measurements', records=[record])
+    await mongo.upsert_documents_hashed(coll_name="bad_measurements", records=[record])
 
     return {"status": "OK"}
 
+
 @router.post(path="/remove_bad_measurement", status_code=200)
 async def remove_bad_measurement(
-        mobile: str = Query(alias="mobile"),
-        m_date: str = Query(alias="measurement_date"),
-        mongo=Depends(get_mongo)
+    mobile: str = Query(alias="mobile"),
+    m_date: str = Query(alias="measurement_date"),
+    mongo=Depends(get_mongo),
 ):
 
     await mongo.delete_document(
-        coll_name="bad_measurements",
-        query={
-            "_id" : f"{mobile}{m_date}"
-        }
+        coll_name="bad_measurements", query={"_id": f"{mobile}{m_date}"}
     )
 
     return {"status": "OK"}

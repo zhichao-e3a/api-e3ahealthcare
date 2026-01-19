@@ -10,9 +10,10 @@ import pandas as pd
 
 from datetime import datetime
 
-OUTLIERS = {"18610926757", "18997836855"}
 
-async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
+async def run_rebuild_job(
+    job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector
+) -> None:
 
     await patch_job(mongo, job_id, status="running", result=None, error=None)
 
@@ -23,21 +24,21 @@ async def run_rebuild_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnec
     except Exception as e:
         await patch_job(mongo, job_id, status="failed", result=None, error=str(e))
 
+
 async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
     for c in ["METADATA_REC"]:
 
         mobiles = await mongo.get_all_documents(
-            coll_name=c,
-            projection={'_id': 0, 'mobile': 1}
+            coll_name=c, projection={"_id": 0, "mobile": 1}
         )
 
         for m in mobiles:
 
             await mongo.patch_document(
                 coll_name=c,
-                query={'mobile': m['mobile']},
-                set_fields={'processed': False}
+                query={"mobile": m["mobile"]},
+                set_fields={"processed": False},
             )
 
             print(f"[{c}] PATIENT {m['mobile']} MARKED AS UNPROCESSED")
@@ -48,35 +49,33 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
 
         print(f"[{c}] {n_del} DOCUMENTS DELETED")
 
-    for c in ['RECORDS_RAW']:
+    for c in ["RECORDS_RAW"]:
 
         await mongo.patch_document(
             coll_name="WATERMARKS",
-            query={'pipeline_name': c},
-            set_fields={'last_utime': '2000-01-01 00:00:00'}
+            query={"pipeline_name": c},
+            set_fields={"last_utime": "2000-01-01 00:00:00"},
         )
 
     print(f"[WATERMARKS] WATERMARK UPDATED TO 2000-01-01 00:00:00")
 
     print()
 
-    print(f"OUTLIERS (RECRUITED PATIENTS BUT MARKED AS HISTORICAL): {OUTLIERS}")
-
-    hist_df = await anyio.to_thread.run_sync(lambda: sql.query_to_dataframe(query=REBUILD_HISTORICAL))
-
-    hist_df = hist_df[~hist_df["mobile"].isin(OUTLIERS)]
+    hist_df = await anyio.to_thread.run_sync(
+        lambda: sql.query_to_dataframe(query=REBUILD_HISTORICAL)
+    )
 
     hist_df["origin"] = "HIST"
 
     print(f"QUERIED FROM NAVICAT ({len(hist_df)} MEASUREMENTS)")
 
     recruited_patients = await mongo.get_all_documents(
-        coll_name   = "METADATA_REC",
-        query       = {'processed': False},
-        projection  = {'_id': 0, 'mobile': 1}
+        coll_name="METADATA_REC",
+        query={"processed": False},
+        projection={"_id": 0, "mobile": 1},
     )
 
-    recruited_mobiles = [i['mobile'] for i in recruited_patients]
+    recruited_mobiles = [i["mobile"] for i in recruited_patients]
 
     print(f"QUERIED FROM `METADATA_REC` ({len(recruited_mobiles)} PATIENTS)")
 
@@ -84,10 +83,12 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
     custom_query = RECRUITED.format(
         start="'2025-03-01 00:00:00'",
         end=f"'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'",
-        numbers=query_string
+        numbers=query_string,
     )
 
-    rec_df = await anyio.to_thread.run_sync(lambda: sql.query_to_dataframe(query=custom_query))
+    rec_df = await anyio.to_thread.run_sync(
+        lambda: sql.query_to_dataframe(query=custom_query)
+    )
 
     rec_df["origin"] = "REC"
 
@@ -102,19 +103,16 @@ async def rebuild(mongo: MongoDBConnector, sql: SQLDBConnector):
     for m in recruited_mobiles:
 
         await mongo.patch_document(
-            coll_name   = "METADATA_REC",
-            query       = {'mobile': m},
-            set_fields  = {'processed': True}
+            coll_name="METADATA_REC",
+            query={"mobile": m},
+            set_fields={"processed": True},
         )
 
         print(f"PATIENT {m} MARKED AS PROCESSED")
 
     if len(df) > 0:
 
-        await mongo.upsert_documents_hashed(
-            coll_name   = 'RECORDS_RAW',
-            records     = records
-        )
+        await mongo.upsert_documents_hashed(coll_name="RECORDS_RAW", records=records)
 
         print(f"UPSERTED TO 'RECORDS_RAW' ({len(records)} RECORDS)")
 

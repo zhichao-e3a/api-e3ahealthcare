@@ -11,7 +11,10 @@ import anyio
 from anyio import CapacityLimiter, create_task_group
 from datetime import datetime
 
-async def run_query_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
+
+async def run_query_job(
+    job_id: str, mongo: MongoDBConnector, sql: SQLDBConnector
+) -> None:
 
     await patch_job(mongo, job_id, status="running", result=None, error=None)
 
@@ -26,12 +29,12 @@ async def run_query_job(job_id: str, mongo: MongoDBConnector, sql: SQLDBConnecto
 async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
 
     new_given_birth = await mongo.get_all_documents(
-        coll_name   = "METADATA_REC",
-        query       = {'processed': False},
-        projection  = {'_id': 0, 'mobile': 1}
+        coll_name="METADATA_REC",
+        query={"processed": False},
+        projection={"_id": 0, "mobile": 1},
     )
 
-    new_given_birth_mobile = [i['mobile'] for i in new_given_birth]
+    new_given_birth_mobile = [i["mobile"] for i in new_given_birth]
 
     print(f"QUERIED FROM `METADATA_REC` ({len(new_given_birth_mobile)} PATIENTS)")
 
@@ -42,10 +45,12 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
         custom_query = RECRUITED.format(
             start="'2025-03-01 00:00:00'",
             end=f"'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'",
-            numbers=query_string
+            numbers=query_string,
         )
 
-        given_birth_df = await anyio.to_thread.run_sync(lambda: sql.query_to_dataframe(query=custom_query))
+        given_birth_df = await anyio.to_thread.run_sync(
+            lambda: sql.query_to_dataframe(query=custom_query)
+        )
 
         if len(given_birth_df) == 0:
             print(f"NO RECORDS FROM PATIENTS: {new_given_birth_mobile}")
@@ -59,27 +64,25 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
             assert_records_match_schema(records, record_type="RAW")
 
             await mongo.upsert_documents_hashed(
-                coll_name='RECORDS_RAW',
-                records=records
+                coll_name="RECORDS_RAW", records=records
             )
 
             print(f"[A] UPSERTED TO 'RECORDS_RAW' ({len(records)} RECORDS)")
 
         for m in new_given_birth_mobile:
             await mongo.patch_document(
-                coll_name   = "METADATA_REC",
-                query       = {'mobile': m},
-                set_fields  = {'processed': True}
+                coll_name="METADATA_REC",
+                query={"mobile": m},
+                set_fields={"processed": True},
             )
 
             print(f"PATIENT {m} MARKED AS PROCESSED")
 
     not_given_birth = await mongo.get_all_documents(
-        coll_name   = "METADATA_PRED",
-        projection  = {'_id': 0, 'mobile': 1}
+        coll_name="METADATA_PRED", projection={"_id": 0, "mobile": 1}
     )
 
-    not_given_birth_mobile = [i['mobile'] for i in not_given_birth]
+    not_given_birth_mobile = [i["mobile"] for i in not_given_birth]
 
     print(f"QUERIED FROM `METADATA_PRED` ({len(not_given_birth_mobile)} PATIENTS)")
 
@@ -90,10 +93,12 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
         custom_query = RECRUITED.format(
             start="'2025-03-01 00:00:00'",
             end=f"'{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'",
-            numbers=query_string
+            numbers=query_string,
         )
 
-        not_given_birth_df = await anyio.to_thread.run_sync(lambda: sql.query_to_dataframe(query=custom_query))
+        not_given_birth_df = await anyio.to_thread.run_sync(
+            lambda: sql.query_to_dataframe(query=custom_query)
+        )
 
         if len(not_given_birth_df) == 0:
             print(f"NO RECORDS FROM PATIENTS: {not_given_birth_mobile}")
@@ -118,6 +123,8 @@ async def query(mongo: MongoDBConnector, sql: SQLDBConnector) -> None:
 
             assert_records_match_schema(filtered, record_type="FILT")
 
-            await mongo.upsert_documents_hashed(coll_name="RECORDS_PRED", records=filtered)
+            await mongo.upsert_documents_hashed(
+                coll_name="RECORDS_PRED", records=filtered
+            )
 
             print(f"[A] UPSERTED TO 'RECORDS_PRED' ({len(filtered)} RECORDS)")

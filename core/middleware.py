@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+
 def install_middleware(app: FastAPI) -> None:
 
     app.add_middleware(
@@ -13,6 +14,6 @@ def install_middleware(app: FastAPI) -> None:
             "[::1]",
             "*.local",
             "host.docker.internal",
-            "172.17.0.1"
+            "172.17.0.1",
         ],
     )
